@@ -1,150 +1,621 @@
 {
   "flowContents": {
-    "identifier": "fuelpulse-bi-root-pg",
-    "name": "FuelPulse BI — Ingestion & HDFS Staging Flow",
-    "comments": "Visual ETL Apache NiFi 1.28.1 untuk menarik data energi & kurs 365 hari (RB=F, HO=F, BZ=F, CL=F, IDR=X, ^OVX), validasi skema, provenance metadata, dan penulisan ke Hadoop HDFS (/fuelpulse/staging/bronze_raw_hourly).",
-    "position": { "x": 0.0, "y": 0.0 },
+    "identifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000",
+    "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000001",
+    "name": "FuelPulse BI - Ingestion & HDFS Staging",
+    "comments": "Visual ETL Apache NiFi 1.28.1 untuk menarik data energi & kurs 365 hari (RB=F, HO=F, BZ=F, CL=F, IDR=X, ^OVX), validasi JSON, provenance metadata, dan penyimpanan ke Hadoop HDFS (/fuelpulse/staging/bronze_raw_hourly).",
+    "position": {
+      "x": 200.0,
+      "y": 120.0
+    },
+    "processGroups": [],
+    "remoteProcessGroups": [],
     "processors": [
       {
-        "identifier": "proc-generate-trigger",
-        "name": "GenerateFlowFile (CRON Daily 06:00 WIB)",
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000010",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000011",
+        "name": "GenerateFlowFile (CRON 06:00 WIB)",
+        "comments": "Pemicu penarikan data harian terjadwal 06:00 WIB (gunakan Run Once untuk demo instan).",
+        "position": {
+          "x": 120.0,
+          "y": 140.0
+        },
         "type": "org.apache.nifi.processors.standard.GenerateFlowFile",
         "bundle": {
           "group": "org.apache.nifi",
           "artifact": "nifi-standard-nar",
           "version": "1.28.1"
         },
-        "position": { "x": 100.0, "y": 140.0 },
-        "schedulingStrategy": "CRON_DRIVEN",
-        "schedulingPeriod": "0 0 6 * * ?",
         "properties": {
           "File Size": "0B",
           "Batch Size": "1",
           "Data Format": "Text",
-          "Unique FlowFiles": "false"
-        }
+          "Unique FlowFiles": "false",
+          "character-set": "UTF-8"
+        },
+        "propertyDescriptors": {
+          "File Size": {
+            "name": "File Size",
+            "displayName": "File Size",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Batch Size": {
+            "name": "Batch Size",
+            "displayName": "Batch Size",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Data Format": {
+            "name": "Data Format",
+            "displayName": "Data Format",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Unique FlowFiles": {
+            "name": "Unique FlowFiles",
+            "displayName": "Unique FlowFiles",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "character-set": {
+            "name": "character-set",
+            "displayName": "Character Set",
+            "identifiesControllerService": false,
+            "sensitive": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 0 6 * * ?",
+        "schedulingStrategy": "CRON_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
       },
       {
-        "identifier": "proc-execute-fetch",
-        "name": "ExecuteStreamCommand (Fetch Yahoo Market 1h & 1d)",
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000020",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000021",
+        "name": "ExecuteStreamCommand (Fetch Yahoo 1h & 1d)",
+        "comments": "Menarik data riil 365 hari RB=F, HO=F, BZ=F, CL=F, IDR=X, ^OVX via fetch_market_data.py.",
+        "position": {
+          "x": 580.0,
+          "y": 140.0
+        },
         "type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
         "bundle": {
           "group": "org.apache.nifi",
           "artifact": "nifi-standard-nar",
           "version": "1.28.1"
         },
-        "position": { "x": 520.0, "y": 140.0 },
-        "schedulingStrategy": "TIMER_DRIVEN",
-        "schedulingPeriod": "0 sec",
         "properties": {
           "Command Path": "/usr/bin/python3",
+          "Command Arguments Strategy": "Command Arguments Property",
           "Command Arguments": "/mnt/c/BigDataProject/nifi/fetch_market_data.py",
           "Working Directory": "/mnt/c/BigDataProject",
+          "Argument Delimiter": ";",
           "Ignore STDIN": "true",
-          "Output Destination Attribute": null
-        }
+          "Output MIME Type": "application/json"
+        },
+        "propertyDescriptors": {
+          "Command Path": {
+            "name": "Command Path",
+            "displayName": "Command Path",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Command Arguments Strategy": {
+            "name": "Command Arguments Strategy",
+            "displayName": "Command Arguments Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Command Arguments": {
+            "name": "Command Arguments",
+            "displayName": "Command Arguments",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Working Directory": {
+            "name": "Working Directory",
+            "displayName": "Working Directory",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Argument Delimiter": {
+            "name": "Argument Delimiter",
+            "displayName": "Argument Delimiter",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Ignore STDIN": {
+            "name": "Ignore STDIN",
+            "displayName": "Ignore STDIN",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Output MIME Type": {
+            "name": "Output MIME Type",
+            "displayName": "Output MIME Type",
+            "identifiesControllerService": false,
+            "sensitive": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [
+          "original",
+          "nonzero status"
+        ],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
       },
       {
-        "identifier": "proc-eval-json",
-        "name": "EvaluateJsonPath (Validate Schema & Counts)",
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000030",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000031",
+        "name": "EvaluateJsonPath (Validate Counts & Schema)",
+        "comments": "Mengekstrak atribut raw_hourly_records, raw_daily_records, dan ingested_at_utc untuk audit Data Provenance.",
+        "position": {
+          "x": 1040.0,
+          "y": 140.0
+        },
         "type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
         "bundle": {
           "group": "org.apache.nifi",
           "artifact": "nifi-standard-nar",
           "version": "1.28.1"
         },
-        "position": { "x": 940.0, "y": 140.0 },
-        "schedulingStrategy": "TIMER_DRIVEN",
-        "schedulingPeriod": "0 sec",
         "properties": {
           "Destination": "flowfile-attribute",
           "Return Type": "auto-detect",
+          "Path Not Found Behavior": "ignore",
+          "Null Value Representation": "empty string",
           "raw_hourly_records": "$.raw_hourly_records",
           "raw_daily_records": "$.raw_daily_records",
           "ingested_at_utc": "$.ingested_at_utc"
-        }
+        },
+        "propertyDescriptors": {
+          "Destination": {
+            "name": "Destination",
+            "displayName": "Destination",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Return Type": {
+            "name": "Return Type",
+            "displayName": "Return Type",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Path Not Found Behavior": {
+            "name": "Path Not Found Behavior",
+            "displayName": "Path Not Found Behavior",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Null Value Representation": {
+            "name": "Null Value Representation",
+            "displayName": "Null Value Representation",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "raw_hourly_records": {
+            "name": "raw_hourly_records",
+            "displayName": "raw_hourly_records",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "raw_daily_records": {
+            "name": "raw_daily_records",
+            "displayName": "raw_daily_records",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "ingested_at_utc": {
+            "name": "ingested_at_utc",
+            "displayName": "ingested_at_utc",
+            "identifiesControllerService": false,
+            "sensitive": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [
+          "failure",
+          "unmatched"
+        ],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
       },
       {
-        "identifier": "proc-update-attr",
-        "name": "UpdateAttribute (Timestamp & Provenance Metadata)",
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000040",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000041",
+        "name": "UpdateAttribute (Filename & Provenance)",
+        "comments": "Menetapkan nama file berstempel waktu dan tag lapisan Medallion bronze_raw_hourly.",
+        "position": {
+          "x": 1040.0,
+          "y": 400.0
+        },
         "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
         "bundle": {
           "group": "org.apache.nifi",
           "artifact": "nifi-update-attribute-nar",
           "version": "1.28.1"
         },
-        "position": { "x": 940.0, "y": 380.0 },
-        "schedulingStrategy": "TIMER_DRIVEN",
-        "schedulingPeriod": "0 sec",
         "properties": {
+          "Store State": "Do not store state",
+          "canonical-value-lookup-cache-size": "100",
           "filename": "fuelpulse_bronze_hourly_${now():format('yyyyMMdd_HHmmss')}.json",
           "fuelpulse.layer": "bronze_raw_hourly",
           "fuelpulse.source": "yahoo_finance_v8",
           "mime.type": "application/json"
-        }
+        },
+        "propertyDescriptors": {
+          "Store State": {
+            "name": "Store State",
+            "displayName": "Store State",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "canonical-value-lookup-cache-size": {
+            "name": "canonical-value-lookup-cache-size",
+            "displayName": "Cache Value Lookup Cache Size",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "filename": {
+            "name": "filename",
+            "displayName": "filename",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "fuelpulse.layer": {
+            "name": "fuelpulse.layer",
+            "displayName": "fuelpulse.layer",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "fuelpulse.source": {
+            "name": "fuelpulse.source",
+            "displayName": "fuelpulse.source",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "mime.type": {
+            "name": "mime.type",
+            "displayName": "mime.type",
+            "identifiesControllerService": false,
+            "sensitive": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
       },
       {
-        "identifier": "proc-put-hdfs",
-        "name": "PutHDFS (Write to /fuelpulse/staging/bronze_raw_hourly)",
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000050",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000051",
+        "name": "PutHDFS (/fuelpulse/staging/bronze_raw_hourly)",
+        "comments": "Menulis FlowFile hasil ingestion ke Hadoop HDFS 3.3.6.",
+        "position": {
+          "x": 580.0,
+          "y": 400.0
+        },
         "type": "org.apache.nifi.processors.hadoop.PutHDFS",
         "bundle": {
           "group": "org.apache.nifi",
           "artifact": "nifi-hadoop-nar",
           "version": "1.28.1"
         },
-        "position": { "x": 520.0, "y": 380.0 },
-        "schedulingStrategy": "TIMER_DRIVEN",
-        "schedulingPeriod": "0 sec",
         "properties": {
           "Hadoop Configuration Resources": "/home/abbyan/hadoop336/etc/hadoop/core-site.xml,/home/abbyan/hadoop336/etc/hadoop/hdfs-site.xml",
+          "Compression codec": "NONE",
+          "Ignore Locality": "false",
+          "Append Mode": "DEFAULT",
+          "writing-strategy": "writeAndRename",
+          "Kerberos Relogin Period": "4 hours",
           "Directory": "/fuelpulse/staging/bronze_raw_hourly",
-          "Conflict Resolution Strategy": "replace",
-          "Block Size": null,
-          "IO Buffer Size": null,
-          "Replication": "1"
-        }
+          "Conflict Resolution Strategy": "replace"
+        },
+        "propertyDescriptors": {
+          "Hadoop Configuration Resources": {
+            "name": "Hadoop Configuration Resources",
+            "displayName": "Hadoop Configuration Resources",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Compression codec": {
+            "name": "Compression codec",
+            "displayName": "Compression codec",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Ignore Locality": {
+            "name": "Ignore Locality",
+            "displayName": "Ignore Locality",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Append Mode": {
+            "name": "Append Mode",
+            "displayName": "Append Mode",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "writing-strategy": {
+            "name": "writing-strategy",
+            "displayName": "Writing Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Kerberos Relogin Period": {
+            "name": "Kerberos Relogin Period",
+            "displayName": "Kerberos Relogin Period",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Directory": {
+            "name": "Directory",
+            "displayName": "Directory",
+            "identifiesControllerService": false,
+            "sensitive": false
+          },
+          "Conflict Resolution Strategy": {
+            "name": "Conflict Resolution Strategy",
+            "displayName": "Conflict Resolution Strategy",
+            "identifiesControllerService": false,
+            "sensitive": false
+          }
+        },
+        "style": {},
+        "schedulingPeriod": "0 sec",
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "executionNode": "ALL",
+        "penaltyDuration": "30 sec",
+        "yieldDuration": "1 sec",
+        "bulletinLevel": "WARN",
+        "runDurationMillis": 0,
+        "concurrentlySchedulableTaskCount": 1,
+        "autoTerminatedRelationships": [
+          "success",
+          "failure"
+        ],
+        "scheduledState": "ENABLED",
+        "retryCount": 10,
+        "retriedRelationships": [],
+        "backoffMechanism": "PENALIZE_FLOWFILE",
+        "maxBackoffPeriod": "10 mins",
+        "componentType": "PROCESSOR",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
       }
     ],
+    "inputPorts": [],
+    "outputPorts": [],
     "connections": [
       {
-        "identifier": "conn-1",
-        "name": "Trigger -> Fetch",
-        "source": { "id": "proc-generate-trigger", "type": "PROCESSOR" },
-        "destination": { "id": "proc-execute-fetch", "type": "PROCESSOR" },
-        "selectedRelationships": ["success"],
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-200000000001",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-200000000011",
+        "name": "Trigger -> Fetch Market Data",
+        "source": {
+          "id": "7c2f3b5a-1a4d-4f6e-9b21-100000000010",
+          "type": "PROCESSOR",
+          "groupId": "7c2f3b5a-1a4d-4f6e-9b21-100000000000",
+          "name": "GenerateFlowFile (CRON 06:00 WIB)",
+          "comments": "",
+          "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000011"
+        },
+        "destination": {
+          "id": "7c2f3b5a-1a4d-4f6e-9b21-100000000020",
+          "type": "PROCESSOR",
+          "groupId": "7c2f3b5a-1a4d-4f6e-9b21-100000000000",
+          "name": "ExecuteStreamCommand (Fetch Yahoo 1h & 1d)",
+          "comments": "",
+          "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000021"
+        },
+        "labelIndex": 1,
+        "zIndex": 0,
+        "selectedRelationships": [
+          "success"
+        ],
         "backPressureObjectThreshold": 10000,
-        "backPressureDataSizeThreshold": "1 GB"
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
       },
       {
-        "identifier": "conn-2",
-        "name": "Fetch Output -> EvaluateJsonPath",
-        "source": { "id": "proc-execute-fetch", "type": "PROCESSOR" },
-        "destination": { "id": "proc-eval-json", "type": "PROCESSOR" },
-        "selectedRelationships": ["output stream"],
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-200000000002",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-200000000022",
+        "name": "JSON Output -> Validate Schema",
+        "source": {
+          "id": "7c2f3b5a-1a4d-4f6e-9b21-100000000020",
+          "type": "PROCESSOR",
+          "groupId": "7c2f3b5a-1a4d-4f6e-9b21-100000000000",
+          "name": "ExecuteStreamCommand (Fetch Yahoo 1h & 1d)",
+          "comments": "",
+          "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000021"
+        },
+        "destination": {
+          "id": "7c2f3b5a-1a4d-4f6e-9b21-100000000030",
+          "type": "PROCESSOR",
+          "groupId": "7c2f3b5a-1a4d-4f6e-9b21-100000000000",
+          "name": "EvaluateJsonPath (Validate Counts & Schema)",
+          "comments": "",
+          "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000031"
+        },
+        "labelIndex": 1,
+        "zIndex": 0,
+        "selectedRelationships": [
+          "output stream"
+        ],
         "backPressureObjectThreshold": 10000,
-        "backPressureDataSizeThreshold": "1 GB"
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
       },
       {
-        "identifier": "conn-3",
-        "name": "Validated -> UpdateAttribute",
-        "source": { "id": "proc-eval-json", "type": "PROCESSOR" },
-        "destination": { "id": "proc-update-attr", "type": "PROCESSOR" },
-        "selectedRelationships": ["matched"],
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-200000000003",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-200000000033",
+        "name": "Validated -> Enrich Metadata",
+        "source": {
+          "id": "7c2f3b5a-1a4d-4f6e-9b21-100000000030",
+          "type": "PROCESSOR",
+          "groupId": "7c2f3b5a-1a4d-4f6e-9b21-100000000000",
+          "name": "EvaluateJsonPath (Validate Counts & Schema)",
+          "comments": "",
+          "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000031"
+        },
+        "destination": {
+          "id": "7c2f3b5a-1a4d-4f6e-9b21-100000000040",
+          "type": "PROCESSOR",
+          "groupId": "7c2f3b5a-1a4d-4f6e-9b21-100000000000",
+          "name": "UpdateAttribute (Filename & Provenance)",
+          "comments": "",
+          "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000041"
+        },
+        "labelIndex": 1,
+        "zIndex": 0,
+        "selectedRelationships": [
+          "matched"
+        ],
         "backPressureObjectThreshold": 10000,
-        "backPressureDataSizeThreshold": "1 GB"
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
       },
       {
-        "identifier": "conn-4",
-        "name": "Enriched -> PutHDFS",
-        "source": { "id": "proc-update-attr", "type": "PROCESSOR" },
-        "destination": { "id": "proc-put-hdfs", "type": "PROCESSOR" },
-        "selectedRelationships": ["success"],
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-200000000004",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-200000000044",
+        "name": "Enriched -> Write to HDFS Bronze",
+        "source": {
+          "id": "7c2f3b5a-1a4d-4f6e-9b21-100000000040",
+          "type": "PROCESSOR",
+          "groupId": "7c2f3b5a-1a4d-4f6e-9b21-100000000000",
+          "name": "UpdateAttribute (Filename & Provenance)",
+          "comments": "",
+          "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000041"
+        },
+        "destination": {
+          "id": "7c2f3b5a-1a4d-4f6e-9b21-100000000050",
+          "type": "PROCESSOR",
+          "groupId": "7c2f3b5a-1a4d-4f6e-9b21-100000000000",
+          "name": "PutHDFS (/fuelpulse/staging/bronze_raw_hourly)",
+          "comments": "",
+          "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000051"
+        },
+        "labelIndex": 1,
+        "zIndex": 0,
+        "selectedRelationships": [
+          "success"
+        ],
         "backPressureObjectThreshold": 10000,
-        "backPressureDataSizeThreshold": "1 GB"
+        "backPressureDataSizeThreshold": "1 GB",
+        "flowFileExpiration": "0 sec",
+        "prioritizers": [],
+        "bends": [],
+        "loadBalanceStrategy": "DO_NOT_LOAD_BALANCE",
+        "partitioningAttribute": "",
+        "loadBalanceCompression": "DO_NOT_COMPRESS",
+        "componentType": "CONNECTION",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
       }
-    ]
+    ],
+    "labels": [
+      {
+        "identifier": "7c2f3b5a-1a4d-4f6e-9b21-300000000001",
+        "instanceIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-300000000011",
+        "position": {
+          "x": 120.0,
+          "y": 400.0
+        },
+        "label": "FuelPulse BI — Visual ETL Pipeline\n1. Start processor #2 s/d #5\n2. Klik kanan GenerateFlowFile -> Run Once\n3. Cek Data Provenance & HDFS :9870\n   /fuelpulse/staging/bronze_raw_hourly",
+        "width": 360.0,
+        "height": 130.0,
+        "style": {
+          "background-color": "#ecfdf5",
+          "font-size": "13px"
+        },
+        "componentType": "LABEL",
+        "groupIdentifier": "7c2f3b5a-1a4d-4f6e-9b21-100000000000"
+      }
+    ],
+    "funnels": [],
+    "controllerServices": [],
+    "variables": {},
+    "defaultFlowFileExpiration": "0 sec",
+    "defaultBackPressureObjectThreshold": 10000,
+    "defaultBackPressureDataSizeThreshold": "1 GB",
+    "flowFileConcurrency": "UNBOUNDED",
+    "flowFileOutboundPolicy": "STREAM_WHEN_AVAILABLE",
+    "componentType": "PROCESS_GROUP"
   },
   "externalControllerServices": {},
   "parameterContexts": {},
+  "parameterProviders": {},
   "flowEncodingVersion": "1.0"
 }
