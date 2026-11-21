@@ -13,9 +13,9 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "MacroAgri-BI Pulse | Analisis Pangan & Machine Learning",
+  title: "FuelPulse BI | Prediksi Harga BBM Non-Subsidi Pertamina & Hadoop HDFS",
   description:
-    "Dasbor analitik Big Data cuaca per-jam dan indikator pasar makroekonomi untuk prediksi indeks komoditas pangan (H+7) serta atribusi faktor historis.",
+    "Platform Big Data Analytics & Machine Learning berbasis Apache NiFi, Hadoop HDFS, XGBoost/RF/Ridge, dan SHAP untuk prediksi harga BBM Non-Subsidi Pertamina.",
 };
 
 export default function RootLayout({

@@ -1,97 +1,121 @@
-# MacroAgri-BI Pulse
+# FuelPulse BI
 
-**MacroAgri-BI Pulse** adalah aplikasi analitik berbasis **Big Data** dan **Machine Learning** yang mengintegrasikan observasi cuaca resolusi per-jam dari **Open-Meteo API** dengan indikator pasar makroekonomi dan komoditas pangan harian dari **Yahoo Finance API** selama **365 hari terakhir** ke dalam format penyimpanan kolumnar **Apache Parquet**.
+**FuelPulse BI** adalah platform analitik **Big Data & Machine Learning** berbasis **Apache NiFi** dan **Hadoop HDFS** untuk memprediksi harga keekonomian harian serta penyesuaian bulanan (setiap tanggal 1) **BBM Non-Subsidi Pertamina** di wilayah **DKI Jakarta & Pulau Jawa (PPN 11% + PBBKB 5%)**, lengkap dengan atribusi faktor historis **SHAP** dan **What-If Scenario Simulator**.
 
-Aplikasi ini menyediakan dua kapabilitas analitik terpadu dalam satu dasbor interaktif **Next.js + Recharts**:
-1. **Explanatory Business Intelligence (Atribusi Faktor Masa Lampau):** Mengukur persentase kontribusi faktor historis (`H−1`, `H−3`, `H−7`, `H−14`, serta *rolling window* 7 hari) terhadap nilai indeks pangan hari ini ($t_0$).
-2. **Predictive Analytics (Peramalan H+7):** Memproyeksikan pergerakan indeks komoditas pangan (`ICBP.JK`) untuk 7 hari ke depan (`H+1` hingga `H+7`) menggunakan **Random Forest Regressor** tanpa kebocoran data masa depan (*no data leakage*).
+### Produk BBM Non-Subsidi yang Dianalisis
+- **Pertamax (RON 92)** — Acuan utama: `RB=F` (RBOB Gasoline Futures — proksi MOPS Mogas)
+- **Pertamax Turbo (RON 98)** — Acuan utama: `RB=F` (RBOB Gasoline Futures — proksi MOPS Mogas)
+- **Dexlite (CN 51)** — Acuan utama: `HO=F` (NY Harbor ULSD — proksi MOPS Gasoil)
+- **Pertamina Dex (CN 53)** — Acuan utama: `HO=F` (NY Harbor ULSD — proksi MOPS Gasoil)
 
 ---
 
-## Arsitektur & Struktur Repositori
+## Arsitektur End-to-End (Compute–Serving Decoupling)
 
 ```text
-macroagri-bi-pulse/
-├── backend/
-│   ├── data/
-│   │   └── processed/
-│   │       └── macro_agri_1yr.parquet   # Dataset Big Data 365 hari terintegrasi
-│   ├── main.py                          # FastAPI Server, Data Pipeline & ML Engine
-│   └── requirements.txt                 # Daftar pustaka Python
-├── frontend/
-│   ├── src/app/
-│   │   ├── page.tsx                     # Komponen utama dasbor Next.js + Recharts
-│   │   ├── layout.tsx                   # Tata letak global aplikasi
-│   │   └── globals.css                  # Konfigurasi Tailwind CSS
-│   ├── package.json                     # Konfigurasi dependensi Node.js
-│   ├── tsconfig.json                    # Konfigurasi TypeScript
-│   ├── next.config.ts                   # Konfigurasi Next.js
-│   └── tailwind.config.ts               # Konfigurasi utilitas gaya tampilan
-└── README.md                            # Dokumentasi instalasi & cara menjalankan
+[1. Sumber Data Real (365 Hari)]  ──▶  [2. Ingestion: Apache NiFi 1.28.1]  ──▶  [3. HDFS Data Lake Staging]
+   Yahoo Finance (RB=F, HO=F,           ExecuteStreamCommand, EvaluateJsonPath,  /fuelpulse/staging/
+   BZ=F, CL=F, IDR=X, ^OVX) &           UpdateAttribute, PutHDFS                   bronze_raw_hourly/
+   pertamina_official.csv                                                          silver_lag_features/
+                                                                                         │
+                                                                                     (Parquet)
+                                                                                         ▼
+[6. Serving & Web UI]             ◀──  [5. Hadoop HDFS Clean Zone (:9870)]  ◀──  [4. Mesin ML & BI (Python)]
+   FastAPI (WebHDFS) + Next.js          /fuelpulse/gold_clean_analytics/           XGBoost vs RF vs Ridge
+   4 KPI, Forecast, SHAP, What-If       predictions/, bi_attribution/,             SHAP TreeExplainer
+                                        metrics/, kpi_insights/                    Kalibrasi ESDM (25-Day)
 ```
 
 ---
 
-## Sumber Data, Harmonisasi & Feature Engineering
+## Struktur Direktori Repositori
 
-### 1. Sumber Data Real (365 Hari Terakhir)
-- **Open-Meteo Historical/Forecast API** *(Per-jam / ~8.760 baris per tahun, koordinat sentra pangan Pantura Jawa Barat `-6.32, 107.76`)*:
-  - `temperature_2m` (Suhu udara)
-  - `precipitation` (Curah hujan)
-  - `relative_humidity_2m` (Kelembapan udara)
-  - `soil_moisture_0_to_7cm` (Kelembapan tanah)
-- **Yahoo Finance Market API** *(Harian hari bursa aktif)*:
-  - `IDR=X` — Kurs USD/IDR
-  - `BZ=F` — Harga Minyak Mentah Brent
-  - `ICBP.JK` — Indeks Sektor/Komoditas Pangan (Target Prediksi)
-
-### 2. Pemrosesan & Penyimpanan Kolumnar
-- Data cuaca per-jam diagregasi ke metrik harian (`temp_mean`, `temp_max`, `precip_sum`, `humidity_mean`, `soil_moisture_mean`).
-- Kalender harian 365 hari diselaraskan dengan metode **Forward Fill (`ffill`)** (serta `bfill` untuk awal rentang) guna menangani hari libur bursa sehingga dataset bebas nilai `NaN`.
-- Fitur historis dibentuk pada jeda **H−1, H−3, H−7, dan H−14** untuk Kurs USD/IDR, Harga Minyak Brent, Curah Hujan, Suhu Maksimum, Kelembapan Tanah, dan Kelembapan Udara, ditambah *rolling window* 7 hari (`rain_7d_sum` & `usd_idr_7d_mean`) yang digeser 1 hari ke belakang agar bebas *data leakage*.
-- Dataset bersih disimpan ke `backend/data/processed/macro_agri_1yr.parquet` untuk caching cepat (`< 2 detik`).
-
-### 3. Pemodelan Machine Learning
-- **Algoritma:** `RandomForestRegressor(n_estimators=200, random_state=42)`
-- **Pembagian Data:** **85% latih / 15% uji secara kronologis** (tanpa pengacakan urutan waktu).
-- **Evaluasi:** `Mean Absolute Error (MAE)` dan `Root Mean Squared Error (RMSE)` pada himpunan uji.
-- **Atribusi BI:** Ekstraksi `feature_importances_` menjadi **8 faktor historis teratas (%)**.
-- **Forecasting H+7:** Proyeksi iteratif 7 hari ke depan dengan menggeser nilai historis terbaru ke dalam jendela *lag* secara kronologis.
+```text
+BigDataProject/
+├── nifi/
+│   ├── fuelpulse_ingestion_flow.json    # Ekspor flow Apache NiFi 1.28.1 (Visual ETL + PutHDFS)
+│   └── fetch_market_data.py             # Script pure-stdlib untuk ExecuteStreamCommand NiFi
+├── hadoop/
+│   └── init_hdfs_dirs.sh                # Inisialisasi direktori /fuelpulse di Hadoop HDFS
+├── backend/
+│   ├── data/
+│   │   └── pertamina_official.csv       # Referensi harga resmi DKI/Jawa (Nov 2025 – Nov 2026)
+│   ├── storage/
+│   │   └── hdfs_client.py               # Klien WebHDFS (:9870) + fallback mirror lokal
+│   ├── pipeline/
+│   │   └── transform.py                 # Bronze->Silver, konversi Rp/L, lag H-1..H-30 & ESDM 25-day
+│   ├── ml/
+│   │   ├── train.py                     # Komparasi XGBoost/RF/Ridge (80/20 split) & ekspor Gold HDFS
+│   │   └── explain.py                   # Ekstraksi SHAP TreeExplainer, Auto-Insights & What-If (<500ms)
+│   ├── main.py                          # Entry point FastAPI (membaca data bersih dari Hadoop HDFS)
+│   └── requirements.txt
+├── frontend/
+│   ├── src/
+│   │   ├── app/
+│   │   │   ├── layout.tsx
+│   │   │   └── page.tsx                 # Dashboard utama FuelPulse BI
+│   │   ├── components/
+│   │   │   ├── KpiCards.tsx
+│   │   │   ├── ForecastChart.tsx
+│   │   │   ├── AttributionChart.tsx
+│   │   │   └── WhatIfSimulator.tsx
+│   │   └── lib/api.ts                   # API client TypeScript menuju FastAPI
+│   ├── package.json
+│   └── tailwind.config.ts
+├── docs/
+│   ├── generate_report.py               # Generator laporan otomatis berbasis metrik HDFS
+│   └── Laporan_BigData_ML.pdf           # Laporan akhir proyek (5 poin wajib)
+└── README.md
+```
 
 ---
 
-## Spesifikasi Endpoint API (FastAPI)
+## Spesifikasi Kontrak API (FastAPI — `http://localhost:8000`)
 
-| Endpoint | Metode | Deskripsi |
-| :--- | :--- | :--- |
-| `/api/dashboard` | `GET` | Endpoint terpadu berisi `metadata`, `bi_lag_attribution` (Top 8), dan `time_series` (30 hari aktual + H+7 proyeksi). |
-| `/api/pipeline/sync` | `POST` | Menarik ulang data 365 hari terakhir dari Open-Meteo & Yahoo Finance, memperbarui berkas Parquet, dan melatih ulang model. |
-| `/api/bi/attribution` | `GET` | Mengembalikan daftar 8 faktor historis paling berpengaruh (`factor`, `importance_pct`). |
-| `/api/ml/predict` | `GET` | Mengembalikan deret waktu aktual vs prediksi beserta skor `mae` dan `rmse`. |
-| `/health` | `GET` | Healthcheck status layanan API. |
+| Endpoint | Metode | Parameter | Fungsi Utama |
+| :--- | :--- | :--- | :--- |
+| `/api/dashboard` | `GET` | `product` (`pertamax`, `pertamax_turbo`, `dexlite`, `pertamina_dex`) | Membaca file Parquet & JSON bersih langsung dari Hadoop HDFS (`/fuelpulse/gold_clean_analytics/`) via WebHDFS (`localhost:9870`). |
+| `/api/pipeline/sync` | `POST` | — | Menjalankan pipeline *batch* Bronze→Silver→ML/SHAP dan menulis seluruh keluaran bersih ke Hadoop HDFS. |
+| `/api/simulate` | `POST` | JSON: `product`, `usd_idr`, `brent_usd` | Menjalankan inferensi simulasi skenario *What-If* secara instan (`< 500 ms`). |
+| `/health` | `GET` | — | Status kesehatan FastAPI dan koneksi Hadoop WebHDFS. |
 
 ---
 
-## Cara Instalasi & Menjalankan Aplikasi
+## Panduan Instalasi & Menjalankan Sistem
 
-### Prasyarat
-- **Python 3.10+**
-- **Node.js 20+** & **npm**
+### 1. Menyalakan Hadoop HDFS & Inisialisasi `/fuelpulse` (WSL Ubuntu)
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+export HADOOP_HOME=~/hadoop336
+export PATH=$PATH:$HADOOP_HOME/bin:$HADOOP_HOME/sbin
 
-### 1. Menjalankan Backend (FastAPI)
+$HADOOP_HOME/sbin/start-dfs.sh
+bash /mnt/c/BigDataProject/hadoop/init_hdfs_dirs.sh
+```
+- **NameNode Web UI**: `http://localhost:9870`
+- **HDFS RPC**: `hdfs://localhost:9000`
+
+### 2. Menyalakan Apache NiFi (WSL Ubuntu)
+```bash
+export JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
+/opt/nifi/bin/nifi.sh start
+```
+- **NiFi UI**: `https://127.0.0.1:8443/nifi`
+- Impor alur `nifi/fuelpulse_ingestion_flow.json` untuk menjalankan Visual ETL terjadwal menuju `/fuelpulse/staging/bronze_raw_hourly/`.
+
+### 3. Menjalankan Backend FastAPI (Windows)
 ```bash
 cd backend
 pip install -r requirements.txt
+python -m ml.train
 python -m uvicorn main:app --reload --port 8000
 ```
-Backend akan berjalan di `http://localhost:8000` (dokumentasi interaktif Swagger tersedia di `http://localhost:8000/docs`).
+- **Swagger API Docs**: `http://localhost:8000/docs`
 
-### 2. Menjalankan Frontend (Next.js)
-Buka terminal baru pada direktori root proyek:
+### 4. Menjalankan Frontend Next.js (Windows)
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
-Dasbor web dapat diakses melalui browser di `http://localhost:3000`.
-*(Opsional: atur `NEXT_PUBLIC_API_URL` jika backend berjalan di host/port berbeda).*
+- **Dashboard Web**: `http://localhost:3000`

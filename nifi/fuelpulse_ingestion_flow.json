@@ -1,0 +1,150 @@
+{
+  "flowContents": {
+    "identifier": "fuelpulse-bi-root-pg",
+    "name": "FuelPulse BI — Ingestion & HDFS Staging Flow",
+    "comments": "Visual ETL Apache NiFi 1.28.1 untuk menarik data energi & kurs 365 hari (RB=F, HO=F, BZ=F, CL=F, IDR=X, ^OVX), validasi skema, provenance metadata, dan penulisan ke Hadoop HDFS (/fuelpulse/staging/bronze_raw_hourly).",
+    "position": { "x": 0.0, "y": 0.0 },
+    "processors": [
+      {
+        "identifier": "proc-generate-trigger",
+        "name": "GenerateFlowFile (CRON Daily 06:00 WIB)",
+        "type": "org.apache.nifi.processors.standard.GenerateFlowFile",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-standard-nar",
+          "version": "1.28.1"
+        },
+        "position": { "x": 100.0, "y": 140.0 },
+        "schedulingStrategy": "CRON_DRIVEN",
+        "schedulingPeriod": "0 0 6 * * ?",
+        "properties": {
+          "File Size": "0B",
+          "Batch Size": "1",
+          "Data Format": "Text",
+          "Unique FlowFiles": "false"
+        }
+      },
+      {
+        "identifier": "proc-execute-fetch",
+        "name": "ExecuteStreamCommand (Fetch Yahoo Market 1h & 1d)",
+        "type": "org.apache.nifi.processors.standard.ExecuteStreamCommand",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-standard-nar",
+          "version": "1.28.1"
+        },
+        "position": { "x": 520.0, "y": 140.0 },
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "schedulingPeriod": "0 sec",
+        "properties": {
+          "Command Path": "/usr/bin/python3",
+          "Command Arguments": "/mnt/c/BigDataProject/nifi/fetch_market_data.py",
+          "Working Directory": "/mnt/c/BigDataProject",
+          "Ignore STDIN": "true",
+          "Output Destination Attribute": null
+        }
+      },
+      {
+        "identifier": "proc-eval-json",
+        "name": "EvaluateJsonPath (Validate Schema & Counts)",
+        "type": "org.apache.nifi.processors.standard.EvaluateJsonPath",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-standard-nar",
+          "version": "1.28.1"
+        },
+        "position": { "x": 940.0, "y": 140.0 },
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "schedulingPeriod": "0 sec",
+        "properties": {
+          "Destination": "flowfile-attribute",
+          "Return Type": "auto-detect",
+          "raw_hourly_records": "$.raw_hourly_records",
+          "raw_daily_records": "$.raw_daily_records",
+          "ingested_at_utc": "$.ingested_at_utc"
+        }
+      },
+      {
+        "identifier": "proc-update-attr",
+        "name": "UpdateAttribute (Timestamp & Provenance Metadata)",
+        "type": "org.apache.nifi.processors.attributes.UpdateAttribute",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-update-attribute-nar",
+          "version": "1.28.1"
+        },
+        "position": { "x": 940.0, "y": 380.0 },
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "schedulingPeriod": "0 sec",
+        "properties": {
+          "filename": "fuelpulse_bronze_hourly_${now():format('yyyyMMdd_HHmmss')}.json",
+          "fuelpulse.layer": "bronze_raw_hourly",
+          "fuelpulse.source": "yahoo_finance_v8",
+          "mime.type": "application/json"
+        }
+      },
+      {
+        "identifier": "proc-put-hdfs",
+        "name": "PutHDFS (Write to /fuelpulse/staging/bronze_raw_hourly)",
+        "type": "org.apache.nifi.processors.hadoop.PutHDFS",
+        "bundle": {
+          "group": "org.apache.nifi",
+          "artifact": "nifi-hadoop-nar",
+          "version": "1.28.1"
+        },
+        "position": { "x": 520.0, "y": 380.0 },
+        "schedulingStrategy": "TIMER_DRIVEN",
+        "schedulingPeriod": "0 sec",
+        "properties": {
+          "Hadoop Configuration Resources": "/home/abbyan/hadoop336/etc/hadoop/core-site.xml,/home/abbyan/hadoop336/etc/hadoop/hdfs-site.xml",
+          "Directory": "/fuelpulse/staging/bronze_raw_hourly",
+          "Conflict Resolution Strategy": "replace",
+          "Block Size": null,
+          "IO Buffer Size": null,
+          "Replication": "1"
+        }
+      }
+    ],
+    "connections": [
+      {
+        "identifier": "conn-1",
+        "name": "Trigger -> Fetch",
+        "source": { "id": "proc-generate-trigger", "type": "PROCESSOR" },
+        "destination": { "id": "proc-execute-fetch", "type": "PROCESSOR" },
+        "selectedRelationships": ["success"],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB"
+      },
+      {
+        "identifier": "conn-2",
+        "name": "Fetch Output -> EvaluateJsonPath",
+        "source": { "id": "proc-execute-fetch", "type": "PROCESSOR" },
+        "destination": { "id": "proc-eval-json", "type": "PROCESSOR" },
+        "selectedRelationships": ["output stream"],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB"
+      },
+      {
+        "identifier": "conn-3",
+        "name": "Validated -> UpdateAttribute",
+        "source": { "id": "proc-eval-json", "type": "PROCESSOR" },
+        "destination": { "id": "proc-update-attr", "type": "PROCESSOR" },
+        "selectedRelationships": ["matched"],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB"
+      },
+      {
+        "identifier": "conn-4",
+        "name": "Enriched -> PutHDFS",
+        "source": { "id": "proc-update-attr", "type": "PROCESSOR" },
+        "destination": { "id": "proc-put-hdfs", "type": "PROCESSOR" },
+        "selectedRelationships": ["success"],
+        "backPressureObjectThreshold": 10000,
+        "backPressureDataSizeThreshold": "1 GB"
+      }
+    ]
+  },
+  "externalControllerServices": {},
+  "parameterContexts": {},
+  "flowEncodingVersion": "1.0"
+}

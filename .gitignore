@@ -8,6 +8,11 @@ venv/
 env/
 *.egg-info/
 
+# Runtime ML artifacts & local HDFS mirror (rebuilt by pipeline -> HDFS)
+backend/data/hdfs_mirror/
+backend/data/models/
+backend/data/processed/
+
 # Next.js & Node.js
 node_modules/
 .next/
