@@ -118,15 +118,15 @@ def generate_actionable_insights(
         insights.append(
             (
                 f"Rekomendasi Operasional: Prediksi penyesuaian tanggal {next_adjustment_date} menunjukkan "
-                f"potensi kenaikan Rp {delta_idr:,}/L menuju Rp {next_month_pred:,}/L — disarankan melakukan "
-                f"pengisian penuh tangki armada sebelum tanggal 1."
+                f"potensi kenaikan Rp {delta_idr:,}/L menuju Rp {next_month_pred:,}/L, sehingga disarankan "
+                f"melakukan pengisian penuh tangki armada sebelum tanggal 1."
             ).replace(",", ".")
         )
     elif status == "TURUN" and abs(delta_idr) >= 200:
         insights.append(
             (
                 f"Rekomendasi Operasional: Prediksi penyesuaian tanggal {next_adjustment_date} mengindikasikan "
-                f"potensi penurunan Rp {abs(delta_idr):,}/L menuju Rp {next_month_pred:,}/L — pertimbangkan "
+                f"potensi penurunan Rp {abs(delta_idr):,}/L menuju Rp {next_month_pred:,}/L, pertimbangkan "
                 f"pengisian secukupnya hingga penyesuaian resmi berlaku."
             ).replace(",", ".")
         )

@@ -1,21 +1,23 @@
 import type { Metadata } from "next";
-import { Inter, JetBrains_Mono } from "next/font/google";
+import { IBM_Plex_Mono, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
 
-const inter = Inter({
+const plusJakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
-  variable: "--font-inter",
+  variable: "--font-sans",
+  weight: ["400", "500", "600", "700"],
 });
 
-const jetbrainsMono = JetBrains_Mono({
+const ibmPlexMono = IBM_Plex_Mono({
   subsets: ["latin"],
-  variable: "--font-jetbrains-mono",
+  variable: "--font-mono",
+  weight: ["400", "500", "600", "700"],
 });
 
 export const metadata: Metadata = {
   title: "FuelPulse BI | Prediksi Harga BBM Non-Subsidi Pertamina & Hadoop HDFS",
   description:
-    "Platform Big Data Analytics & Machine Learning berbasis Apache NiFi, Hadoop HDFS, XGBoost/RF/Ridge, dan SHAP untuk prediksi harga BBM Non-Subsidi Pertamina.",
+    "Platform analitik Big Data dan Machine Learning berbasis Apache NiFi, Hadoop HDFS, XGBoost/RF/Ridge, dan SHAP untuk prediksi harga BBM Non-Subsidi Pertamina.",
 };
 
 export default function RootLayout({
@@ -24,8 +26,16 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="id" className={`${inter.variable} ${jetbrainsMono.variable}`}>
-      <body className="min-h-screen font-sans">{children}</body>
+    <html
+      lang="id"
+      className={`${plusJakartaSans.variable} ${ibmPlexMono.variable}`}
+    >
+      <body className="min-h-screen font-sans">
+        <a href="#main-content" className="skip-link">
+          Lewati ke konten utama
+        </a>
+        {children}
+      </body>
     </html>
   );
 }

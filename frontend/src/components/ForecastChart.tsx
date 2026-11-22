@@ -51,22 +51,22 @@ function ForecastTooltip({ active, payload, label }: TooltipProps) {
       : null;
 
   return (
-    <div className="rounded-xl border border-slate-200 bg-white/95 p-3 shadow-lg backdrop-blur-sm">
-      <div className="mb-1.5 flex items-center justify-between gap-4 border-b border-slate-100 pb-1.5">
-        <span className="font-mono text-xs font-semibold text-slate-800">
+    <div className="rounded-md border border-stone-500 bg-white p-3">
+      <div className="mb-2 flex items-center justify-between gap-4 border-b border-stone-200 pb-1.5">
+        <span className="font-mono text-xs font-semibold text-stone-900">
           {label}
         </span>
         <span
-          className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+          className={`rounded border px-1.5 py-0.5 text-[11px] font-semibold ${
             pt.is_forecast
-              ? "bg-amber-100 text-amber-800"
+              ? "border-amber-700 bg-amber-50 text-amber-900"
               : pt.horizon === "t0"
-                ? "bg-emerald-100 text-emerald-800"
-                : "bg-slate-100 text-slate-600"
+                ? "border-petrol-700 bg-petrol-50 text-petrol-800"
+                : "border-stone-400 bg-stone-100 text-stone-800"
           }`}
         >
           {pt.horizon === "t0"
-            ? "Hari Ini (t₀)"
+            ? "Hari Ini (t0)"
             : pt.is_forecast
               ? pt.horizon ?? "Proyeksi"
               : "Historis"}
@@ -75,45 +75,38 @@ function ForecastTooltip({ active, payload, label }: TooltipProps) {
       <div className="space-y-1 text-xs">
         {pt.official_price !== null && (
           <div className="flex items-center justify-between gap-5">
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <span className="h-2 w-2 rounded-full bg-slate-700" />
-              Harga Resmi SPBU
-            </span>
-            <span className="font-mono font-semibold text-slate-900">
+            <span className="text-stone-700">Harga Resmi SPBU</span>
+            <span className="font-mono font-semibold tabular-nums text-stone-900">
               {formatRp(pt.official_price)}
             </span>
           </div>
         )}
         {pt.economic_parity !== null && (
           <div className="flex items-center justify-between gap-5">
-            <span className="flex items-center gap-1.5 text-slate-600">
-              <span className="h-2 w-2 rounded-full bg-emerald-600" />
-              Keekonomian Harian
-            </span>
-            <span className="font-mono font-semibold text-emerald-700">
+            <span className="text-stone-700">Keekonomian Harian</span>
+            <span className="font-mono font-semibold tabular-nums text-petrol-800">
               {formatRp(pt.economic_parity)}
             </span>
           </div>
         )}
         <div className="flex items-center justify-between gap-5">
-          <span className="flex items-center gap-1.5 text-slate-600">
-            <span className="h-2 w-2 rounded-full bg-amber-500" />
+          <span className="text-stone-700">
             {pt.is_forecast ? "Proyeksi ML" : "Estimasi Model"}
           </span>
-          <span className="font-mono font-semibold text-amber-700">
+          <span className="font-mono font-semibold tabular-nums text-amber-800">
             {formatRp(pt.predicted_price)}
           </span>
         </div>
         {diff !== null && (
-          <div className="mt-1 flex items-center justify-between gap-5 border-t border-slate-100 pt-1">
-            <span className="text-slate-500">Selisih vs SPBU</span>
+          <div className="mt-1 flex items-center justify-between gap-5 border-t border-stone-200 pt-1">
+            <span className="text-stone-600">Selisih vs SPBU</span>
             <span
-              className={`font-mono font-bold ${
+              className={`font-mono font-bold tabular-nums ${
                 diff > 0
-                  ? "text-rose-600"
+                  ? "text-rose-700"
                   : diff < 0
-                    ? "text-emerald-600"
-                    : "text-slate-700"
+                    ? "text-emerald-700"
+                    : "text-stone-800"
               }`}
             >
               {diff > 0 ? "+" : diff < 0 ? "-" : ""}Rp{" "}
@@ -128,62 +121,60 @@ function ForecastTooltip({ active, payload, label }: TooltipProps) {
 
 export function ForecastChart({ data, metadata, kpi }: ForecastChartProps) {
   return (
-    <div className="min-w-0 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm lg:col-span-7">
-      <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+    <div className="min-w-0 rounded-lg border border-stone-300 bg-white p-5 lg:col-span-7">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-emerald-700">
-            Predictive Analytics • {metadata.benchmark_label} (
-            {metadata.benchmark_ticker})
-          </span>
-          <h2 className="text-lg font-bold text-slate-900">
-            Harga Resmi SPBU vs Keekonomian &amp; Proyeksi{" "}
+          <p className="text-xs font-semibold text-petrol-700">
+            Prediksi Harga ({metadata.benchmark_label}, {metadata.benchmark_ticker})
+          </p>
+          <h2 className="mt-0.5 text-lg font-bold text-stone-900">
+            Pergerakan Harga Resmi SPBU vs Keekonomian dan Proyeksi{" "}
             {kpi.next_adjustment_date}
           </h2>
-          <p className="text-xs text-slate-500">
-            Garis tangga menunjukkan harga resmi SPBU (DKI/Jawa), garis solid
-            menampilkan keekonomian harian, dan garis putus-putus memproyeksikan
-            pergerakan hingga tanggal 1 bulan depan.
+          <p className="mt-1 text-xs text-stone-600">
+            Apakah harga keekonomian harian saat ini berada di atas atau di
+            bawah harga resmi SPBU?
           </p>
         </div>
-        <div className="shrink-0 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-right">
-          <p className="text-[11px] font-medium text-slate-500">
+        <div className="shrink-0 rounded-md border border-stone-300 bg-stone-50 px-3 py-2 sm:text-right">
+          <p className="text-xs font-medium text-stone-600">
             Target Tgl {kpi.next_adjustment_date}
           </p>
-          <p className="font-mono text-sm font-bold text-slate-900">
+          <p className="font-mono text-sm font-bold tabular-nums text-stone-900">
             Rp {intFmt.format(kpi.next_month_prediction)}/L
           </p>
         </div>
       </div>
 
-      <div className="h-[360px] w-full">
+      <div className="h-[280px] w-full sm:h-[340px]">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart
             data={data}
-            margin={{ top: 24, right: 16, left: 6, bottom: 8 }}
+            margin={{ top: 24, right: 14, left: 4, bottom: 8 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#e7e5e4" />
             <XAxis
               dataKey="date"
               tickFormatter={formatShortDate}
-              tick={{ fontSize: 11, fill: "#64748b" }}
+              tick={{ fontSize: 11, fill: "#44403c" }}
               minTickGap={22}
             />
             <YAxis
               domain={["auto", "auto"]}
               tickFormatter={(val: number) => intFmt.format(val)}
-              tick={{ fontSize: 11, fill: "#64748b" }}
-              width={60}
+              tick={{ fontSize: 11, fill: "#44403c" }}
+              width={56}
             />
             <Tooltip content={<ForecastTooltip />} />
             <Legend wrapperStyle={{ fontSize: "12px", paddingTop: "8px" }} />
             <ReferenceLine
               x={metadata.end_date}
-              stroke="#334155"
+              stroke="#44403c"
               strokeDasharray="3 3"
               label={{
-                value: "Hari Ini (t₀)",
+                value: "Hari Ini (t0)",
                 position: "top",
-                fill: "#334155",
+                fill: "#1c1917",
                 fontSize: 11,
                 fontWeight: 600,
               }}
@@ -201,7 +192,7 @@ export function ForecastChart({ data, metadata, kpi }: ForecastChartProps) {
               type="monotone"
               dataKey="economic_parity"
               name="Harga Keekonomian Harian"
-              stroke="#059669"
+              stroke="#0e5a6f"
               strokeWidth={2.4}
               dot={false}
               activeDot={{ r: 5 }}
@@ -211,10 +202,10 @@ export function ForecastChart({ data, metadata, kpi }: ForecastChartProps) {
               type="monotone"
               dataKey="forecast_line"
               name={`Proyeksi ML s/d ${kpi.next_adjustment_date}`}
-              stroke="#d97706"
-              strokeWidth={2.75}
+              stroke="#b45309"
+              strokeWidth={2.6}
               strokeDasharray="6 4"
-              dot={{ r: 3, fill: "#d97706" }}
+              dot={{ r: 3, fill: "#b45309" }}
               activeDot={{ r: 6 }}
               connectNulls={false}
             />
