@@ -5,6 +5,7 @@ import { ExternalLink, RefreshCw } from "lucide-react";
 import { AttributionChart } from "@/components/AttributionChart";
 import { ForecastChart } from "@/components/ForecastChart";
 import { KpiCards } from "@/components/KpiCards";
+import { RegionalPbbkbTable } from "@/components/RegionalPbbkbTable";
 import { WhatIfSimulator } from "@/components/WhatIfSimulator";
 import {
   API_BASE_URL,
@@ -117,6 +118,12 @@ export default function FuelPulseDashboardPage() {
                   Data Real 365 Hari:{" "}
                   <strong className="ml-1 font-mono text-stone-900">
                     {data.metadata.date_range}
+                  </strong>
+                </span>
+                <span className="inline-flex min-h-[36px] items-center rounded border border-stone-300 bg-stone-50 px-2.5 py-1 text-stone-700">
+                  Volume Big Data:{" "}
+                  <strong className="ml-1 font-mono text-stone-900">
+                    {intFmt.format(data.metadata.raw_hourly_records)} baris riil
                   </strong>
                 </span>
                 <a
@@ -336,15 +343,22 @@ export default function FuelPulseDashboardPage() {
               bestModelName={data.kpi.model_metrics.best_model}
             />
 
+            <RegionalPbbkbTable
+              rows={data.regional_prices ?? []}
+              productName={data.metadata.product_name}
+              nextAdjustmentDate={data.kpi.next_adjustment_date}
+              bronzeBreakdown={data.metadata.bronze_breakdown}
+            />
+
             <footer className="mt-6 rounded-lg border border-stone-300 bg-white px-5 py-3.5 text-xs text-stone-700">
               <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
                 <span>
                   Arsitektur:{" "}
                   <strong className="text-stone-900">
-                    Apache NiFi 1.28.1, Hadoop HDFS 3.3.6 (Bronze/Silver/Gold),
+                    Apache NiFi 1.28.1, Hadoop HDFS 3.3.6, Apache Spark 3.5.1,
                     FastAPI WebHDFS, Next.js
                   </strong>{" "}
-                  | Formula ESDM (25-Day Window, PPN 11% + PBBKB 5%)
+                  | Formula ESDM (25-Day Window, PPN 11% + PBBKB 5%-10%)
                 </span>
                 <span className="font-mono text-xs text-stone-600">
                   API: {API_BASE_URL}

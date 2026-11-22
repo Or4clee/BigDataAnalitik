@@ -71,6 +71,31 @@ export interface ModelComparisonRow {
   r2_score: number;
 }
 
+export interface BronzeBreakdown {
+  market_hourly_rows: number;
+  regional_weather_hourly_rows: number;
+  total_bronze_hourly_rows: number;
+  hubs_count: number;
+  provinces_count: number;
+}
+
+export interface RegionalPriceRow {
+  province: string;
+  region_group: string;
+  pbbkb_pct: number;
+  hubs_count: number;
+  hourly_observations: number;
+  official_price_prov: number;
+  economic_parity_prov: number;
+  predicted_next_month_prov: number;
+  delta_idr_prov: number;
+  status: "NAIK" | "TURUN" | "STABIL";
+  avg_temp_c: number;
+  annual_rain_per_hub_mm: number;
+  max_wind_kmh: number;
+  severe_weather_pct: number;
+}
+
 export interface DashboardMetadata {
   product_key: ProductKey;
   product_name: string;
@@ -83,6 +108,7 @@ export interface DashboardMetadata {
   end_date: string;
   date_range: string;
   raw_hourly_records: number;
+  bronze_breakdown?: BronzeBreakdown;
   daily_records: number;
   train_records: number;
   test_records: number;
@@ -128,6 +154,7 @@ export interface DashboardResponse {
   kpi: DashboardKpi;
   bi_lag_attribution: AttributionFactor[];
   time_series: ForecastPoint[];
+  regional_prices?: RegionalPriceRow[];
   model_comparison: ModelComparisonRow[];
   insights: string[];
 }

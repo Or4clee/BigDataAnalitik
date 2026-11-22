@@ -111,12 +111,15 @@ def build_report() -> Path:
     pdf.set_font("Helvetica", "B", 9.5)
     pdf.set_fill_color(236, 253, 245)
     pdf.set_text_color(6, 95, 70)
+    bronze_bd = eval_obj.get("bronze_breakdown", {})
+    hubs_cnt = bronze_bd.get("hubs_count", 125)
+    provs_cnt = bronze_bd.get("provinces_count", 38)
     pdf.cell(
         0,
         7,
         _ascii_safe(
-            f"Rentang Data Real: {eval_obj['date_range']}  |  Sumber Serving: {eval_src}  |  "
-            f"Record Hourly: {eval_obj['raw_hourly_records']:,}".replace(",", ".")
+            f"Data Real: {eval_obj['date_range']} | Serving: {eval_src} | "
+            f"Total Bronze: {eval_obj['raw_hourly_records']:,} baris ({hubs_cnt} hub, {provs_cnt} prov.)".replace(",", ".")
         ),
         border=1,
         fill=True,
@@ -130,47 +133,54 @@ def build_report() -> Path:
     pdf.body_text(
         _ascii_safe(
             "Harga BBM Non-Subsidi Pertamina dievaluasi secara berkala setiap tanggal 1 setiap bulan "
-            "mengacu pada formula harga dasar Kementerian ESDM dengan struktur pajak DKI Jakarta & "
-            "Pulau Jawa sebesar PPN 11% dan PBBKB 5% (pengali pajak 1,16x). FuelPulse BI menerapkan "
-            "pemisahan beban kerja (compute-serving decoupling) untuk menjawab dua kebutuhan utama: "
+            "mengacu pada formula harga dasar Kementerian ESDM dengan struktur pajak dasar DKI Jakarta & "
+            "Pulau Jawa sebesar PPN 11% dan PBBKB 5% (pengali pajak 1,16x), serta penyesuaian PBBKB "
+            "daerah (5%, 7,5%, dan 10%) di seluruh 38 provinsi Indonesia. FuelPulse BI menerapkan "
+            "pemisahan beban kerja (compute-serving decoupling) untuk menjawab tiga kebutuhan utama: "
             "(1) Predictive Analytics guna menghitung Daily Economic Parity Price serta memproyeksikan "
-            "penyesuaian harga resmi tanggal 1 bulan berikutnya, dan (2) Explanatory Business Intelligence "
-            "berbasis SHAP guna membedah kontribusi faktor historis (H-1 s/d H-30 dan jendela evaluasi "
-            "25 hari ESDM) dalam persentase (%) dan dampak moneter (Rp/liter)."
+            "penyesuaian harga resmi tanggal 1 bulan berikutnya, (2) Explanatory Business Intelligence "
+            "berbasis SHAP guna membedah kontribusi 32 fitur historis (H-1 s/d H-30, jendela evaluasi "
+            "25 hari ESDM, dan indikator cuaca logistik 125 hub) dalam persentase (%) dan dampak moneter "
+            "(Rp/liter), serta (3) Matriks Harga Regional 38 Provinsi berbasis tarif PBBKB resmi."
         )
     )
 
-    # 2. Arsitektur Big Data (Apache NiFi + Hadoop HDFS) & Sumber Data Real
-    pdf.section_title("2. Arsitektur Big Data (Apache NiFi + Hadoop HDFS) & Sumber Data Real")
+    # 2. Arsitektur Big Data (Apache NiFi + Hadoop HDFS + Apache Spark) & Sumber Data Real
+    pdf.section_title("2. Arsitektur Big Data (NiFi + Hadoop HDFS + Spark) & Volume >1 Juta Baris")
+    market_rows = bronze_bd.get("market_hourly_rows", 27019)
+    regional_rows = bronze_bd.get("regional_weather_hourly_rows", 1095000)
+    total_rows = bronze_bd.get("total_bronze_hourly_rows", eval_obj["raw_hourly_records"])
     pdf.body_text(
         _ascii_safe(
-            "Pipeline Big Data menerapkan arsitektur Medallion 6 tahap: "
-            "(1) Penarikan data pasar energi global & kurs real 365 hari terakhir dari Yahoo Finance "
-            "(RB=F RBOB Gasoline, HO=F NY Harbor ULSD, BZ=F Brent Crude, CL=F WTI Crude, IDR=X USD/IDR "
-            "resolusi per-jam dan harian, serta ^OVX Oil Volatility Index harian) bersama arsip resmi "
-            "pertamina_official.csv (13 titik tanggal 1 Nov 2025 - Nov 2026); "
-            "(2) Orkestrasi Visual ETL Apache NiFi 1.28.1 (ExecuteStreamCommand -> EvaluateJsonPath -> "
-            "UpdateAttribute -> PutHDFS); "
-            "(3) Penyimpanan Data Lake Staging di Hadoop HDFS 3.3.6 (/fuelpulse/staging/bronze_raw_hourly/ "
-            "dan /fuelpulse/staging/silver_lag_features/) dalam format kolumnar Apache Parquet; "
-            "(4) Batch Training ML & SHAP; "
-            "(5) Persistensi keluaran bersih ke Hadoop HDFS Clean Zone (/fuelpulse/gold_clean_analytics/); "
-            "serta (6) Lapisan Serving FastAPI membaca langsung dari Hadoop HDFS via WebHDFS REST API "
-            "(port 9870) untuk disajikan ke antarmuka web Next.js + Recharts."
-        )
+            f"Pipeline Big Data menerapkan arsitektur Medallion 6 tahap dengan total {total_rows:,} baris "
+            f"observasi per-jam RIIL (0% data sintetis) di Hadoop HDFS Bronze Zone: "
+            f"(1) Pasar energi global & kurs real 365 hari dari Yahoo Finance ({market_rows:,} baris hourly: "
+            "RB=F RBOB Gasoline, HO=F NY Harbor ULSD, BZ=F Brent Crude, CL=F WTI Crude, IDR=X USD/IDR, "
+            "serta ^OVX harian) bersama arsip resmi pertamina_official.csv (13 titik Nov 2025 - Nov 2026); "
+            f"(2) Data spasial-temporal cuaca & logistik distribusi BBM dari Open-Meteo Archive API lintas "
+            f"{hubs_cnt} hub di {provs_cnt} provinsi Indonesia x 365 hari x 24 jam = {regional_rows:,} baris "
+            "riil (/fuelpulse/staging/bronze_raw_hourly/regional_logistics_weather_1m.parquet); "
+            "(3) Orkestrasi Visual ETL Apache NiFi 1.28.1 (ExecuteStreamCommand -> EvaluateJsonPath -> "
+            "UpdateAttribute -> PutHDFS) dan agregasi terdistribusi Apache Spark 3.5.1 (spark_aggregate_1m.py) "
+            "menuju Hadoop HDFS Silver Zone (/fuelpulse/staging/silver_lag_features/); "
+            "(4) Batch Training ML & SHAP; (5) Persistensi keluaran bersih ke Hadoop HDFS Gold Clean Zone "
+            "(/fuelpulse/gold_clean_analytics/ termasuk regional/provincial_prices_*.parquet); serta "
+            "(6) Lapisan Serving FastAPI membaca langsung via WebHDFS REST API (:9870) ke web Next.js."
+        ).replace(",", ".")
     )
 
     # 3. Metodologi Feature Engineering, ML & SHAP
-    pdf.section_title("3. Rekayasa Fitur, Seleksi Model ML & Atribusi SHAP")
+    pdf.section_title("3. Rekayasa 32 Fitur Historis, Seleksi Model ML & Atribusi SHAP")
     pdf.body_text(
         _ascii_safe(
-            "Lapisan Silver mengagregasi observasi per-jam menjadi metrik harian (open, high, low, close, "
-            "daily_volatility), menyelaraskan hari libur perdagangan dengan Forward Fill (ffill) tanpa "
-            "data leakage, mengonversi kuotasi internasional (USD/gal dan USD/bbl) ke Rp/liter, dan "
-            "membentuk fitur jeda waktu H-1, H-3, H-7, H-14, H-21, H-30 beserta Rolling Mean 25 Hari "
-            "(digeser shift(1) agar murni historis). Tiga algoritma regresi (XGBoost Regressor, Random Forest "
-            "Regressor, dan Ridge Regression) dikomparasi otomatis menggunakan Time-Series Split kronologis "
-            "80% data latih (292 hari) dan 20% data uji terbaru (73 hari) dengan target MAE < Rp 250/liter. "
+            "Lapisan Silver mengagregasi observasi per-jam pasar dan 1,095 juta baris cuaca logistik menjadi "
+            "metrik harian (OHLC, volatilitas intraday, curah hujan rata-rata nasional 125 hub, angin puncak "
+            "logistik, dan indeks cuaca ekstrem distribusi), menyelaraskan hari libur perdagangan dengan "
+            "Forward Fill (ffill) tanpa data leakage, mengonversi kuotasi internasional (USD/gal dan USD/bbl) "
+            "ke Rp/liter, dan membentuk 32 fitur jeda waktu murni historis (H-1, H-3, H-7, H-14, H-21, H-30 "
+            "beserta Rolling Mean 25 Hari ESDM dengan shift(1)). Tiga algoritma regresi (XGBoost Regressor, "
+            "Random Forest Regressor, dan Ridge Regression) dikomparasi otomatis menggunakan Time-Series Split "
+            "kronologis 80% data latih (292 hari) dan 20% data uji terbaru (73 hari) dengan target MAE < Rp 250/L. "
             "Atribusi faktor dihitung menggunakan SHAP TreeExplainer dipadukan dengan Global Feature Importance."
         )
     )
@@ -214,27 +224,29 @@ def build_report() -> Path:
         f"{x['factor']} ({x['importance_pct']:.1f}%, {x['shap_impact_idr']:+d} Rp/L)"
         for x in top_dexlite
     )
+    maes = [summaries[p]["kpi"]["model_metrics"]["mae_idr"] for p in ("pertamax", "pertamax_turbo", "dexlite", "pertamina_dex")]
+    r2s = [summaries[p]["kpi"]["model_metrics"]["r2_score"] for p in ("pertamax", "pertamax_turbo", "dexlite", "pertamina_dex")]
     pdf.body_text(
         _ascii_safe(
             f"Temuan Atribusi SHAP Utama - Pertamax (RON 92): {p_str}. "
             f"Sedangkan pada kelompok diesel - Dexlite (CN 51): {d_str}. "
             f"Seluruh keempat produk memenuhi kriteria akurasi PRD dengan MAE berada di kisaran "
-            f"Rp 160,8 - Rp 189,4/liter (< Rp 250/L) dan R2 di atas 0,94 pada 20% data uji kronologis."
+            f"Rp {min(maes):.1f} - Rp {max(maes):.1f}/liter (< Rp 250/L) dan R2 di kisaran "
+            f"{min(r2s):.3f} - {max(r2s):.3f} pada 20% data uji kronologis."
         )
     )
 
-    # 5. Implementasi Sistem, What-If Simulator & Kesimpulan
-    pdf.section_title("5. Implementasi Aplikasi Web, Simulator What-If & Kesimpulan")
+    # 5. Implementasi Sistem, What-If Simulator & Matriks 38 Provinsi
+    pdf.section_title("5. Implementasi Web, Simulator What-If, Matriks 38 Provinsi & Kesimpulan")
     pdf.body_text(
         _ascii_safe(
             "Antarmuka Next.js FuelPulse BI menyajikan 4 tab pemilih produk BBM dinamis, 4 Executive KPI Cards, "
             "Composed Forecast Chart (Harga Resmi step line, Harga Keekonomian solid, dan Proyeksi ML garis "
             "putus-putus hingga tanggal 1 bulan berikutnya), Horizontal SHAP Attribution Bar Chart, tabel "
-            "komparasi 3 model ML, Auto-Insights berbahasa Indonesia, serta Interactive What-If Scenario Simulator "
-            "untuk Kurs USD/IDR (Rp 14.500 - Rp 19.500) dan Brent Crude ($55 - $120/barel) dengan latensi "
-            "inferensi di bawah 500 ms (~12 ms terukur). Dengan pemisahan beban kerja melalui Hadoop HDFS Clean "
-            "Zone (/fuelpulse/gold_clean_analytics), layanan web menyajikan analitik secara cepat, konsisten, "
-            "dan siap untuk demonstrasi end-to-end maupun pengembangan skala produksi."
+            "komparasi 3 model ML, Auto-Insights berbahasa Indonesia, Interactive What-If Scenario Simulator "
+            "(Kurs USD/IDR Rp 14.500 - Rp 19.500 dan Brent Crude $55 - $120/barel dengan latensi < 500 ms), "
+            "serta tabel Proyeksi Harga Regional 38 Provinsi berbasis tarif PBBKB (5%, 7,5%, 10%) dan indeks "
+            "cuaca ekstrem hasil agregasi >1,095 juta observasi jam-jaman dari 125 hub di Hadoop HDFS."
         )
     )
 

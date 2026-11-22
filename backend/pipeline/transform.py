@@ -21,6 +21,7 @@ from zoneinfo import ZoneInfo
 import numpy as np
 import pandas as pd
 
+from pipeline.regional_ingestion import fetch_and_persist_regional_1m
 from storage.hdfs_client import HDFSClient
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -130,6 +131,10 @@ def get_product_feature_spec(product_key: str) -> list[tuple[str, str, str]]:
             ("ovx_lag_7", "Volatilitas Minyak ^OVX (H-7)", "H-7"),
             (f"{bench_prefix}_vol_lag_1", f"Volatilitas Intraday {bench_label} (H-1)", "H-1"),
             (f"{bench_prefix}_vol_lag_7", f"Volatilitas Intraday {bench_label} (H-7)", "H-7"),
+            ("nat_rain_lag_1", "Curah Hujan Nasional 125 Hub (H-1)", "H-1"),
+            ("nat_rain_lag_7", "Curah Hujan Nasional 125 Hub (H-7)", "H-7"),
+            ("nat_wind_lag_1", "Angin Puncak Logistik 125 Hub (H-1)", "H-1"),
+            ("logistics_idx_lag_1", "Indeks Cuaca Ekstrem Distribusi (H-1)", "H-1"),
         ]
     )
     return specs
@@ -250,19 +255,28 @@ def _add_lag_and_rolling_features(df: pd.DataFrame) -> pd.DataFrame:
         out[f"rbob_vol_lag_{lag}"] = out["rbob_volatility"].shift(lag)
         out[f"ulsd_vol_lag_{lag}"] = out["ulsd_volatility"].shift(lag)
 
+    # Strictly lagged national logistics & weather indicators from 125 Indonesian fuel hubs
+    out["nat_rain_lag_1"] = out["nat_rain_mean_mm"].shift(1)
+    out["nat_rain_lag_7"] = out["nat_rain_mean_mm"].shift(7)
+    out["nat_wind_lag_1"] = out["nat_wind_max_kmh"].shift(1)
+    out["logistics_idx_lag_1"] = out["logistics_disruption_idx"].shift(1)
+
     return out
 
 
-def run_bronze_silver_pipeline(hdfs: HDFSClient) -> dict[str, Any]:
-    """Execute Bronze ingestion & Silver feature engineering and persist Parquet files to HDFS."""
+def run_bronze_silver_pipeline(
+    hdfs: HDFSClient,
+    force_refresh_regional: bool = False,
+) -> dict[str, Any]:
+    """Execute Bronze ingestion (market + 1.095M regional weather rows) & Silver feature engineering."""
     fetcher = _load_nifi_fetcher()
     envelope = fetcher.collect_all_market_data()
 
     hourly_df = pd.DataFrame(envelope["hourly_records"])
     daily_df = pd.DataFrame(envelope["daily_records"])
-    raw_hourly_records = int(envelope["raw_hourly_records"])
+    market_hourly_rows = int(envelope["raw_hourly_records"])
 
-    # 1. Persist Bronze hourly Parquet to HDFS Staging
+    # 1. Persist Bronze market hourly Parquet to HDFS Staging
     bronze_uploaded = hdfs.put_parquet(BRONZE_HDFS_PATH, hourly_df)
 
     # 2. Aggregate hourly + daily backfill per series
@@ -288,6 +302,17 @@ def run_bronze_silver_pipeline(hdfs: HDFSClient) -> dict[str, Any]:
     target_start_date = end_date - timedelta(days=364)  # Exact 365 calendar days
     raw_start_date = target_start_date - timedelta(days=45)  # Warm-up for H-30 & 25-day rolling
 
+    # 3. Ingest 1,095,000+ real hourly spatial-temporal weather rows across 125 hubs (38 provinces)
+    regional_info = fetch_and_persist_regional_1m(
+        hdfs=hdfs,
+        start_date=target_start_date,
+        end_date=end_date,
+        force_refresh=force_refresh_regional,
+    )
+    daily_logistics_df: pd.DataFrame = regional_info["daily_logistics_df"].copy()
+    daily_logistics_df["local_date"] = pd.to_datetime(daily_logistics_df["date"]).dt.date
+    daily_logistics_indexed = daily_logistics_df.set_index("local_date").sort_index()
+
     cal_index = pd.date_range(raw_start_date, end_date, freq="D").date
     merged = pd.DataFrame(index=cal_index)
     merged.index.name = "date"
@@ -305,6 +330,10 @@ def run_bronze_silver_pipeline(hdfs: HDFSClient) -> dict[str, Any]:
     merged["wti_usd"] = series_frames["wti_crude"]["close"].reindex(cal_index)
     merged["usd_idr"] = series_frames["usd_idr"]["close"].reindex(cal_index)
     merged["ovx_close"] = series_frames["oil_volatility"]["close"].reindex(cal_index)
+
+    # Join national daily logistics & weather features (aggregated from 1,095,000+ real hourly rows)
+    for col in ("nat_rain_mean_mm", "nat_wind_max_kmh", "nat_temp_mean_c", "logistics_disruption_idx"):
+        merged[col] = daily_logistics_indexed[col].reindex(cal_index)
 
     # Harmonize holidays/weekends via Forward Fill (plus bfill only for initial edge)
     merged = merged.ffill().bfill()
@@ -343,15 +372,23 @@ def run_bronze_silver_pipeline(hdfs: HDFSClient) -> dict[str, Any]:
         silver_1yr = silver_1yr.ffill().bfill()
 
     silver_uploaded = hdfs.put_parquet(SILVER_HDFS_PATH, silver_1yr)
+    regional_hourly_rows = int(regional_info["regional_hourly_rows"])
+    total_bronze_hourly_rows = market_hourly_rows + regional_hourly_rows
 
     return {
         "silver_df": silver_1yr,
+        "provincial_weather_df": regional_info["provincial_weather_df"],
         "calibrations": calibrations,
-        "raw_hourly_records": raw_hourly_records,
+        "raw_hourly_records": total_bronze_hourly_rows,
+        "market_hourly_rows": market_hourly_rows,
+        "regional_hourly_rows": regional_hourly_rows,
+        "hubs_count": int(regional_info["hubs_count"]),
+        "provinces_count": int(regional_info["provinces_count"]),
         "series_counts": envelope["series_counts"],
         "start_date": str(silver_1yr["date"].iloc[0]),
         "end_date": str(silver_1yr["date"].iloc[-1]),
         "bronze_uploaded": bronze_uploaded,
+        "regional_bronze_uploaded": bool(regional_info["bronze_uploaded"]),
         "silver_uploaded": silver_uploaded,
         "ingested_at": datetime.now(ZoneInfo(TIMEZONE)).isoformat(),
     }

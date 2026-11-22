@@ -124,11 +124,14 @@ export function KpiCards({ kpi, metadata }: KpiCardsProps) {
           </span>
         </div>
         <p className="mt-2 text-xs text-stone-600">
-          {kpi.model_metrics.best_model},{" "}
+          {kpi.model_metrics.best_model} |{" "}
           <span className="font-mono font-semibold tabular-nums text-stone-800">
             {intFmt.format(metadata.raw_hourly_records)}
           </span>{" "}
-          baris hourly
+          baris riil
+          {metadata.bronze_breakdown
+            ? ` (${metadata.bronze_breakdown.hubs_count} hub, ${metadata.bronze_breakdown.provinces_count} prov.)`
+            : ""}
         </p>
       </div>
     </section>

@@ -21,6 +21,7 @@ DIRS=(
   "/fuelpulse/gold_clean_analytics/bi_attribution"
   "/fuelpulse/gold_clean_analytics/metrics"
   "/fuelpulse/gold_clean_analytics/kpi_insights"
+  "/fuelpulse/gold_clean_analytics/regional"
 )
 
 for dir in "${DIRS[@]}"; do

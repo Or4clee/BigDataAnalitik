@@ -80,11 +80,19 @@ def health_check() -> dict[str, Any]:
 
 
 @app.post("/api/pipeline/sync")
-def sync_pipeline() -> dict[str, Any]:
+def sync_pipeline(
+    force_refresh_regional: bool = Query(
+        default=False,
+        description="Paksa unduh ulang 1.095.000 baris cuaca regional dari Open-Meteo Archive",
+    ),
+) -> dict[str, Any]:
     """Run Bronze->Silver->Gold ML/SHAP batch pipeline and write clean outputs to Hadoop HDFS."""
     try:
         with _SYNC_LOCK:
-            result = run_full_training_and_hdfs_export(hdfs_client)
+            result = run_full_training_and_hdfs_export(
+                hdfs_client,
+                force_refresh_regional=force_refresh_regional,
+            )
         result["hdfs_status"] = hdfs_client.check_status()
         return result
     except Exception as exc:
@@ -113,6 +121,13 @@ def get_dashboard(
         )
         eval_obj, _ = hdfs_client.read_json(f"{GOLD_ROOT}/metrics/model_evaluation.json")
 
+        regional_path = f"{GOLD_ROOT}/regional/provincial_prices_{product}.parquet"
+        if hdfs_client.exists(regional_path):
+            regional_df, _ = hdfs_client.read_parquet(regional_path)
+            regional_records = _sanitize_records(regional_df.to_dict(orient="records"))
+        else:
+            regional_records = []
+
         hdfs_status = hdfs_client.check_status()
         source_storage = src_summary if "Hadoop HDFS" in src_summary else src_pred
 
@@ -123,6 +138,7 @@ def get_dashboard(
             "kpi": summary_obj["kpi"],
             "bi_lag_attribution": _sanitize_records(attr_df.to_dict(orient="records")),
             "time_series": _sanitize_records(pred_df.to_dict(orient="records")),
+            "regional_prices": regional_records,
             "model_comparison": summary_obj["model_comparison"],
             "all_products_evaluation": eval_obj.get("products", {}),
             "insights": summary_obj["insights"],

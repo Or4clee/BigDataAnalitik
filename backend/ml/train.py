@@ -28,6 +28,7 @@ from pipeline.transform import (
     LAG_WINDOWS,
     PRODUCTS,
     REGION_LABEL,
+    TAX_MULTIPLIER_DKI,
     TIMEZONE,
     get_product_feature_spec,
     run_bronze_silver_pipeline,
@@ -58,7 +59,17 @@ def _project_to_next_month(
     bench_col = cfg["benchmark_col"]
     bench_vol_col = cfg["benchmark_vol_col"]
 
-    sim_cols = [bench_col, "usd_idr", "brent_usd", "wti_usd", "ovx_close", bench_vol_col]
+    sim_cols = [
+        bench_col,
+        "usd_idr",
+        "brent_usd",
+        "wti_usd",
+        "ovx_close",
+        bench_vol_col,
+        "nat_rain_mean_mm",
+        "nat_wind_max_kmh",
+        "logistics_disruption_idx",
+    ]
     sim_df = silver_df[sim_cols].tail(35).reset_index(drop=True).copy()
 
     # Carry forward trailing 7-day average for exogenous variables while real lags ripple forward
@@ -85,6 +96,11 @@ def _project_to_next_month(
             feat[f"ovx_lag_{lag}"] = float(sim_df["ovx_close"].iloc[-lag])
             feat[f"{bench_prefix}_vol_lag_{lag}"] = float(sim_df[bench_vol_col].iloc[-lag])
 
+        feat["nat_rain_lag_1"] = float(sim_df["nat_rain_mean_mm"].iloc[-1])
+        feat["nat_rain_lag_7"] = float(sim_df["nat_rain_mean_mm"].iloc[-7])
+        feat["nat_wind_lag_1"] = float(sim_df["nat_wind_max_kmh"].iloc[-1])
+        feat["logistics_idx_lag_1"] = float(sim_df["logistics_disruption_idx"].iloc[-1])
+
         x_future = pd.DataFrame([feat])[feature_cols]
         pred_val = round(float(model.predict(x_future)[0]), 2)
 
@@ -104,10 +120,54 @@ def _project_to_next_month(
     return projections
 
 
-def run_full_training_and_hdfs_export(hdfs: HDFSClient) -> dict[str, Any]:
+def _build_provincial_prices_df(
+    provincial_weather_df: pd.DataFrame,
+    current_official_dki: int,
+    today_parity_dki: int,
+    next_month_pred_dki: int,
+    round_step: int = 50,
+) -> pd.DataFrame:
+    """Compute official Pertamina Patra Niaga provincial PBBKB (5%, 7.5%, 10%) price matrix for all 38 provinces."""
+    rows: list[dict[str, Any]] = []
+    for _, row in provincial_weather_df.iterrows():
+        pbbkb_rate = float(row["pbbkb_rate"])
+        tax_mult = (1.0 + 0.11 + pbbkb_rate) / TAX_MULTIPLIER_DKI
+        official_prov = round_retail_price(current_official_dki * tax_mult, step=round_step)
+        parity_prov = int(round(today_parity_dki * tax_mult))
+        pred_prov = round_retail_price(next_month_pred_dki * tax_mult, step=round_step)
+        delta_prov = pred_prov - official_prov
+        rows.append(
+            {
+                "province": str(row["province"]),
+                "region_group": str(row["region_group"]),
+                "pbbkb_pct": round(pbbkb_rate * 100.0, 1),
+                "hubs_count": int(row["hubs_count"]),
+                "hourly_observations": int(row["hourly_observations"]),
+                "official_price_prov": int(official_prov),
+                "economic_parity_prov": int(parity_prov),
+                "predicted_next_month_prov": int(pred_prov),
+                "delta_idr_prov": int(delta_prov),
+                "status": classify_price_status(delta_prov),
+                "avg_temp_c": round(float(row["avg_temp_c"]), 1),
+                "annual_rain_per_hub_mm": round(float(row["annual_rain_per_hub_mm"]), 1),
+                "max_wind_kmh": round(float(row["max_wind_kmh"]), 1),
+                "severe_weather_pct": round(float(row["severe_weather_pct"]), 2),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def run_full_training_and_hdfs_export(
+    hdfs: HDFSClient,
+    force_refresh_regional: bool = False,
+) -> dict[str, Any]:
     """Run Bronze->Silver->ML/SHAP batch pipeline and write all Gold outputs to Hadoop HDFS."""
-    stage_result = run_bronze_silver_pipeline(hdfs)
+    stage_result = run_bronze_silver_pipeline(
+        hdfs,
+        force_refresh_regional=force_refresh_regional,
+    )
     silver_df: pd.DataFrame = stage_result["silver_df"]
+    provincial_weather_df: pd.DataFrame = stage_result["provincial_weather_df"]
     calibrations: dict[str, dict[str, float]] = stage_result["calibrations"]
 
     MODEL_DIR.mkdir(parents=True, exist_ok=True)
@@ -117,8 +177,16 @@ def run_full_training_and_hdfs_export(hdfs: HDFSClient) -> dict[str, Any]:
     split_idx = int(len(silver_df) * 0.80)  # Chronological 80% Train / 20% Test
     all_evaluations: dict[str, Any] = {}
     hdfs_write_results: dict[str, bool] = {
-        "bronze_parquet": stage_result["bronze_uploaded"],
+        "bronze_market_parquet": stage_result["bronze_uploaded"],
+        "bronze_regional_1m_parquet": stage_result["regional_bronze_uploaded"],
         "silver_parquet": stage_result["silver_uploaded"],
+    }
+    bronze_breakdown = {
+        "market_hourly_rows": stage_result["market_hourly_rows"],
+        "regional_weather_hourly_rows": stage_result["regional_hourly_rows"],
+        "total_bronze_hourly_rows": stage_result["raw_hourly_records"],
+        "hubs_count": stage_result["hubs_count"],
+        "provinces_count": stage_result["provinces_count"],
     }
 
     for product_key, cfg in PRODUCTS.items():
@@ -293,6 +361,13 @@ def run_full_training_and_hdfs_export(hdfs: HDFSClient) -> dict[str, Any]:
         # Write clean ML outputs directly to Hadoop HDFS Gold Clean Zone
         pred_df = pd.DataFrame(time_series)
         attr_df = pd.DataFrame(bi_attribution)
+        regional_df = _build_provincial_prices_df(
+            provincial_weather_df=provincial_weather_df,
+            current_official_dki=current_official,
+            today_parity_dki=today_parity,
+            next_month_pred_dki=next_month_prediction,
+            round_step=cfg["round_step"],
+        )
 
         hdfs_write_results[f"predictions_{product_key}"] = hdfs.put_parquet(
             f"{GOLD_ROOT}/predictions/{product_key}_forecast.parquet",
@@ -301,6 +376,10 @@ def run_full_training_and_hdfs_export(hdfs: HDFSClient) -> dict[str, Any]:
         hdfs_write_results[f"attribution_{product_key}"] = hdfs.put_parquet(
             f"{GOLD_ROOT}/bi_attribution/{product_key}_shap.parquet",
             attr_df,
+        )
+        hdfs_write_results[f"regional_{product_key}"] = hdfs.put_parquet(
+            f"{GOLD_ROOT}/regional/provincial_prices_{product_key}.parquet",
+            regional_df,
         )
 
         summary_payload = {
@@ -316,6 +395,7 @@ def run_full_training_and_hdfs_export(hdfs: HDFSClient) -> dict[str, Any]:
                 "end_date": stage_result["end_date"],
                 "date_range": f"{stage_result['start_date']} s/d {stage_result['end_date']}",
                 "raw_hourly_records": stage_result["raw_hourly_records"],
+                "bronze_breakdown": bronze_breakdown,
                 "daily_records": int(len(silver_df)),
                 "train_records": int(len(x_train)),
                 "test_records": int(len(x_test)),
@@ -359,6 +439,7 @@ def run_full_training_and_hdfs_export(hdfs: HDFSClient) -> dict[str, Any]:
         "split_strategy": "Time-Series Split (80% Train / 20% Test, chronological, random_state=42)",
         "date_range": f"{stage_result['start_date']} s/d {stage_result['end_date']}",
         "raw_hourly_records": stage_result["raw_hourly_records"],
+        "bronze_breakdown": bronze_breakdown,
         "products": all_evaluations,
     }
     hdfs_write_results["model_evaluation_json"] = hdfs.put_json(
@@ -369,10 +450,11 @@ def run_full_training_and_hdfs_export(hdfs: HDFSClient) -> dict[str, Any]:
     return {
         "status": "success",
         "message": (
-            "Pipeline Bronze->Silver->Gold (XGBoost/RF/Ridge + SHAP) selesai "
-            "dan seluruh output bersih berhasil ditulis ke Hadoop HDFS."
+            "Pipeline Bronze->Silver->Gold (1,12+ juta baris riil, XGBoost/RF/Ridge + SHAP, "
+            "dan matriks PBBKB 38 provinsi) selesai ditulis ke Hadoop HDFS."
         ),
         "raw_hourly_records": stage_result["raw_hourly_records"],
+        "bronze_breakdown": bronze_breakdown,
         "daily_records": int(len(silver_df)),
         "start_date": stage_result["start_date"],
         "end_date": stage_result["end_date"],
